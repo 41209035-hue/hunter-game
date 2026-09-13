@@ -1,21 +1,11 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-
-// 託管 public 資料夾內的靜態檔案，並停用快取避免瀏覽器快取舊 JavaScript
-app.use(express.static(path.join(__dirname, 'public'), {
-  etag: false,
-  maxAge: 0,
-  setHeaders: (res) => {
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-  }
-}));
 
 // 安全取得 Supabase Client
 function getSupabase() {
@@ -49,7 +39,6 @@ const CP_PASSCODES = {
   "CP6": "歡樂一百點"
 };
 
-// 將 Google Drive 分享網址轉為直接顯示圖片的網址
 function convertDriveUrlToDirect(url) {
   if (!url) return "";
   const match = String(url).match(/id=([a-zA-Z0-9_-]+)/) || String(url).match(/\/d\/([a-zA-Z0-9_-]+)/);
@@ -59,7 +48,6 @@ function convertDriveUrlToDirect(url) {
   return url;
 }
 
-// 寫入日誌記錄
 async function logAction(supabase, groupId, targetId, stage, note) {
   if (!supabase) return;
   try {
@@ -77,7 +65,7 @@ async function logAction(supabase, groupId, targetId, stage, note) {
   }
 }
 
-// 健康檢查 API
+// 健康檢查 API (網址會是 /api/health)
 app.get('/api/health', (req, res) => {
   const supabase = getSupabase();
   res.json({
@@ -88,7 +76,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// API 1: 綁定目標與獲取初始謎題
+// API 1: 綁定目標 (網址會是 /api/bind-target)
 app.post('/api/bind-target', async (req, res) => {
   try {
     const supabase = getSupabase();
@@ -158,7 +146,7 @@ app.post('/api/bind-target', async (req, res) => {
   }
 });
 
-// API 2: 提交密碼驗證與獲取線索
+// API 2: 提交密碼 (網址會是 /api/submit-passcode)
 app.post('/api/submit-passcode', async (req, res) => {
   try {
     const supabase = getSupabase();
@@ -230,18 +218,5 @@ app.post('/api/submit-passcode', async (req, res) => {
     return res.status(500).json({ success: false, message: `伺服器內部錯誤: ${err.message}` });
   }
 });
-
-// 所有非 /api 的請求，一律傳回 public/index.html[cite: 10]
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// 本地測試用[cite: 10]
-if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
-    console.log(`Server running locally on port ${PORT}`);
-  });
-}
 
 module.exports = app;
