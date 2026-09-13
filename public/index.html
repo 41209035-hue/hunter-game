@@ -246,7 +246,8 @@
     showLoading(true);
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/bind-target`, {
+      // 修改前若有誤寫為 /server.js 請修正，正確應為：
+      const res = await fetch('/api/bind-target', {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ groupId, targetId })
@@ -295,7 +296,7 @@
     showLoading(true);
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/submit-passcode`, {
+      const res = await fetch('/api/submit-passcode', {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
