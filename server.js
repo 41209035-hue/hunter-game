@@ -1,15 +1,11 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-
-// 提供靜態檔案服務 (HTML / CSS / JS / 圖片)
-app.use(express.static(__dirname));
 
 // 安全取得 Supabase Client (動態載入防崩潰)
 function getSupabase() {
@@ -71,7 +67,7 @@ async function logAction(supabase, groupId, targetId, stage, note) {
   }
 }
 
-// 健康檢查 API (測試 Server 是否活著)
+// 健康檢查 API
 app.get('/api/health', (req, res) => {
   const supabase = getSupabase();
   res.json({
@@ -100,7 +96,6 @@ app.post('/api/bind-target', async (req, res) => {
       return res.json({ success: false, message: "請選擇正確的組別與通緝犯代碼！" });
     }
 
-    // 1. 查詢目標人物資料 (target_data)
     const { data: targetData, error: targetError } = await supabase
       .from('target_data')
       .select('*')
@@ -108,7 +103,6 @@ app.post('/api/bind-target', async (req, res) => {
       .maybeSingle();
 
     if (targetError) {
-      console.error("target_data 查詢失敗:", targetError);
       return res.json({ success: false, message: `資料庫查詢錯誤: ${targetError.message}` });
     }
 
@@ -116,23 +110,16 @@ app.post('/api/bind-target', async (req, res) => {
       return res.json({ success: false, message: "查無此通緝犯代碼，請確認編號後重新輸入！" });
     }
 
-    // 2. 查詢小組路線資料 (route_data)
     const { data: routeData, error: routeError } = await supabase
       .from('route_data')
       .select('*')
       .eq('group_id', groupId.toUpperCase())
       .maybeSingle();
 
-    if (routeError) {
-      console.error("route_data 查詢失敗:", routeError);
-      return res.json({ success: false, message: `小組路線查詢錯誤: ${routeError.message}` });
+    if (routeError || !routeData) {
+      return res.json({ success: false, message: "查無此小組路線資料！" });
     }
 
-    if (!routeData) {
-      return res.json({ success: false, message: "查無此小組編號！" });
-    }
-
-    // 處理路線與謎題陣列
     const routeList = typeof routeData.route === 'string' 
       ? routeData.route.split(',').map(s => s.trim()) 
       : (routeData.route || []);
@@ -148,7 +135,6 @@ app.post('/api/bind-target', async (req, res) => {
       itemDesc: targetData.belongings_desc || "無證物描述"
     };
 
-    // 紀錄寫入 log
     logAction(supabase, groupId, targetId, 0, "BINDING");
 
     return res.json({
@@ -158,12 +144,11 @@ app.post('/api/bind-target', async (req, res) => {
       puzzles
     });
   } catch (err) {
-    console.error("Unhandled error in bind-target:", err);
     return res.status(500).json({ success: false, message: `伺服器內部錯誤: ${err.message}` });
   }
 });
 
-// API 2: 提交密碼驗證並獲取下一階段線索
+// API 2: 提交密碼驗證與獲取線索
 app.post('/api/submit-passcode', async (req, res) => {
   try {
     const supabase = getSupabase();
@@ -183,7 +168,6 @@ app.post('/api/submit-passcode', async (req, res) => {
     const nextStage = currentStage + 1;
     const isFinished = nextStage >= 6;
 
-    // 讀取該通緝犯資料
     const { data: targetData, error: targetError } = await supabase
       .from('target_data')
       .select('*')
@@ -233,17 +217,11 @@ app.post('/api/submit-passcode', async (req, res) => {
       nextPuzzle: isFinished ? null : (puzzles ? puzzles[nextStage] : null)
     });
   } catch (err) {
-    console.error("Unhandled error in submit-passcode:", err);
     return res.status(500).json({ success: false, message: `伺服器內部錯誤: ${err.message}` });
   }
 });
 
-// 通配所有其他請求傳送 index.html (避免前端路由 404)
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// 本地測試時開 Port，Vercel 部署時直接匯出 app
+// 本地測試用
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
