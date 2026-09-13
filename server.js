@@ -1,11 +1,15 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// 託管 public 資料夾內的靜態檔案
+app.use(express.static(path.join(__dirname, 'public')));
 
 // 安全取得 Supabase Client
 function getSupabase() {
@@ -219,6 +223,11 @@ app.post('/api/submit-passcode', async (req, res) => {
   } catch (err) {
     return res.status(500).json({ success: false, message: `伺服器內部錯誤: ${err.message}` });
   }
+});
+
+// 所有非 /api 的請求，一律直接傳回 public/index.html
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // 本地測試用
