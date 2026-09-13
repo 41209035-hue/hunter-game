@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>查誰屬通緝犯 - 賞金獵人搜查系統</title>
+  <style>
+    /* 保持原樣樣式... */
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="wanted-header">
+    <h1><img src="img/peo.png" width="100" height="90" alt=""/>&nbsp;<img src="img/wwww.png" width="200" height="101" alt=""/></h1>
+    <p>臺灣體大運傳系－直屬通緝犯搜查系統</p>
+  </div>
+
+  <!-- 步驟 1: 登入綁定 -->
+  <div id="step-bind">
+    <div class="section-title">［第一步：新手獵人報到］</div>
+    <label for="group-select">請選擇你的小組：</label>
+    <select id="group-select">
+      <option value="">-- 請選擇組別 --</option>
+      <option value="G01">第 01 組</option>
+      <option value="G02">第 02 組</option>
+      <option value="G03">第 03 組</option>
+      <option value="G04">第 04 組</option>
+      <option value="G05">第 05 組</option>
+    </select>
+
+    <label for="target-code">輸入抽到的直屬通緝代碼（數字）：</label>
+    <input type="number" id="target-code" placeholder="請輸入編號（例如：1, 2, 3...）" min="1">
+
+    <button type="button" onclick="bindTarget()">鎖定目標並開啟案件</button>
+  </div>
+
+  <!-- 步驟 2: 主搜查介面 -->
+  <div id="step-main" class="hidden">
+    <div style="display:flex; justify-content:space-between; font-weight:bold;">
+      <span id="display-group">小組：--</span>
+      <span id="display-target">通緝編號：--</span>
+    </div>
+
+    <div class="section-title">［通緝犯情報檔案］</div>
+    <div class="clue-box" id="clue-list"></div>
+
+    <div id="game-active">
+      <div class="section-title">［下階段地點謎題］</div>
+      <div class="puzzle-card" id="puzzle-text">正在讀取謎題中...</div>
+
+      <div class="section-title">［輸入線人緝捕密碼］</div>
+      <input type="text" id="passcode-input" placeholder="請向關主索取密碼">
+      <button type="button" onclick="submitPasscode()">驗證密碼並解鎖情報</button>
+    </div>
+
+    <!-- 終極認親成功畫面 -->
+    <div id="game-finished" class="hidden" style="text-align:center;">
+      <div class="section-title" style="background-color: var(--accent-color);">［緝捕成功！最終懸賞令］</div>
+      <h2 style="font-size:22px; color:var(--accent-color); margin:10px 0;">恭喜成功鎖定直屬目標！</h2>
+      
+      <div style="border:3px double var(--border-color); padding:15px; background-color:#fff; margin-top:10px;">
+        <p style="font-size:16px; font-weight:bold; margin:0 0 10px 0;">你的直屬真實姓名：</p>
+        <div id="final-name" style="font-size:28px; font-weight:bold; color:var(--accent-color); margin-bottom:15px;">---</div>
+        <img id="final-photo" class="item-img" src="" alt="直屬照片" style="max-height:300px;">
+      </div>
+
+      <p style="margin-top:15px; font-size:14px; font-weight:bold;">請小組帶領獵人手冊回到主會場，準備進行【懸賞新聞發布會】進行認親！</p>
+    </div>
+  </div>
+
+  <div id="loading" class="loading hidden">通訊中，情報傳輸中...</div>
+</div>
+
+<script>
+  // 請替換為您部署後的後端網址 (例如：https://my-backend.onrender.com)
+  const BACKEND_URL = "";
+
+  let gameState = {
+    groupId: "",
+    targetId: "",
+    currentStage: 0,
+    route: [],
+    puzzles: [],
+    unlockedHints: []
+  };
+
+  function showLoading(show) {
+    document.getElementById('loading').classList.toggle('hidden', !show);
+  }
+
+  // 1. 綁定目標
+  async function bindTarget() {
+    const groupId = document.getElementById('group-select').value;
+    const targetId = document.getElementById('target-code').value.trim();
+
+    if (!groupId || !targetId) {
+      alert("請選擇組別並輸入通緝編號！");
+      return;
+    }
+
+    showLoading(true);
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/bind-target`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groupId, targetId })
+      });
+      const data = await res.json();
+
+      if (!data.success) {
+        alert(data.message);
+        return;
+      }
+
+      gameState.groupId = groupId;
+      gameState.targetId = targetId;
+      gameState.currentStage = 0;
+      gameState.route = data.route;
+      gameState.puzzles = data.puzzles;
+
+      // 設定初始線索 (隨身物品描述與圖片)
+      let initialHTML = `<div>${data.targetInfo.itemDesc || "無描述資訊"}</div>`;
+      if (data.targetInfo.itemPhoto) {
+        initialHTML += `<img class="item-img" src="${data.targetInfo.itemPhoto}" alt="隨身證物照片">`;
+      }
+      gameState.unlockedHints = [initialHTML];
+
+      // 切換畫面
+      document.getElementById('step-bind').classList.add('hidden');
+      document.getElementById('step-main').classList.remove('hidden');
+      document.getElementById('display-group').innerText = `小組：${groupId}`;
+      document.getElementById('display-target').innerText = `編號：${targetId} 號`;
+
+      updateUI();
+    } catch (err) {
+      console.error("bindTarget Error:", err);
+      alert("連線失敗，請檢查網路狀況或伺服器設定！");
+    } finally {
+      showLoading(false);
+    }
+  }
+
+  // 2. 提交密碼驗證
+  async function submitPasscode() {
+    const inputPasscode = document.getElementById('passcode-input').value.trim();
+    if (!inputPasscode) {
+      alert("請輸入線人密碼！");
+      return;
+    }
+
+    showLoading(true);
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/submit-passcode`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          groupId: gameState.groupId,
+          targetId: gameState.targetId,
+          currentStage: gameState.currentStage,
+          inputPasscode: inputPasscode,
+          route: gameState.route,
+          puzzles: gameState.puzzles
+        })
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        alert(data.message);
+        return;
+      }
+
+      if (data.unlockedHint) {
+        gameState.unlockedHints.push(data.unlockedHint);
+      }
+
+      gameState.currentStage = data.nextStage;
+      document.getElementById('passcode-input').value = "";
+
+      if (data.isFinished) {
+        document.getElementById('game-active').classList.add('hidden');
+        document.getElementById('game-finished').classList.remove('hidden');
+        document.getElementById('final-name').innerText = data.finalName;
+
+        if (data.finalPhoto) {
+          document.getElementById('final-photo').src = data.finalPhoto;
+        } else {
+          document.getElementById('final-photo').style.display = 'none';
+        }
+      } else {
+        updateUI();
+      }
+    } catch (err) {
+      console.error("submitPasscode Error:", err);
+      alert("驗證處理失敗！");
+    } finally {
+      showLoading(false);
+    }
+  }
+
+  // 3. 更新畫面
+  function updateUI() {
+    const clueBox = document.getElementById('clue-list');
+    clueBox.innerHTML = "";
+
+    const labels = [
+      "開場綁定：隨身證物", 
+      "線索 1（通緝宣言）", 
+      "線索 2（最愛手搖）", 
+      "線索 3（經典口頭禪）", 
+      "線索 4（日常喜好）", 
+      "線索 5（身份特徵）"
+    ];
+
+    gameState.unlockedHints.forEach((hint, idx) => {
+      const item = document.createElement('div');
+      item.className = 'clue-item';
+      item.innerHTML = `<span>［${labels[idx]}］</span> ${hint}`;
+      clueBox.appendChild(item);
+    });
+
+    if (gameState.currentStage < 6) {
+      document.getElementById('puzzle-text').innerText = gameState.puzzles[gameState.currentStage];
+    }
+  }
+</script>
+</body>
+</html>
