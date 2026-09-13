@@ -1,14 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-const express = require('express');
-const cors = require('cors');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
@@ -17,20 +8,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 提供靜態檔案服務
+// 提供靜態檔案服務 (HTML / CSS / JS / 圖片)
 app.use(express.static(__dirname));
 
-// 首頁路由 (防止 404)
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// ... 後續的 getSupabase() 與 API 保持不變 ...
-
-// 靜態檔案提供 (確保 HTML / 圖片可正常讀取)
-app.use(express.static(__dirname));
-
-// 安全取得 Supabase Client (避免頂層宣告在變數異常時直接毀滅 Server)
+// 安全取得 Supabase Client (動態載入防崩潰)
 function getSupabase() {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
@@ -90,7 +71,7 @@ async function logAction(supabase, groupId, targetId, stage, note) {
   }
 }
 
-// 健康檢查 API (測試 Server 是否活着)
+// 健康檢查 API (測試 Server 是否活著)
 app.get('/api/health', (req, res) => {
   const supabase = getSupabase();
   res.json({
@@ -255,6 +236,11 @@ app.post('/api/submit-passcode', async (req, res) => {
     console.error("Unhandled error in submit-passcode:", err);
     return res.status(500).json({ success: false, message: `伺服器內部錯誤: ${err.message}` });
   }
+});
+
+// 通配所有其他請求傳送 index.html (避免前端路由 404)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // 本地測試時開 Port，Vercel 部署時直接匯出 app
