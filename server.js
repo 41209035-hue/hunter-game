@@ -7,6 +7,26 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
+require('dotenv').config();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// 提供靜態檔案服務
+app.use(express.static(__dirname));
+
+// 首頁路由 (防止 404)
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// ... 後續的 getSupabase() 與 API 保持不變 ...
+
 // 靜態檔案提供 (確保 HTML / 圖片可正常讀取)
 app.use(express.static(__dirname));
 
