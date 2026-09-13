@@ -239,3 +239,11 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
 }
 
 module.exports = app;
+
+// 提供 public 資料夾內的靜態檔案
+app.use(express.static(path.join(__dirname, 'public')));
+
+// 所有非 /api 的請求，一律傳回 public/index.html
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
