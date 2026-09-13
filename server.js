@@ -8,8 +8,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 託管 public 資料夾內的靜態檔案
-app.use(express.static(path.join(__dirname, 'public')));
+// 託管 public 資料夾內的靜態檔案，並停用快取避免瀏覽器快取舊 JavaScript
+app.use(express.static(path.join(__dirname, 'public'), {
+  etag: false,
+  maxAge: 0,
+  setHeaders: (res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  }
+}));
 
 // 安全取得 Supabase Client
 function getSupabase() {
@@ -225,12 +231,12 @@ app.post('/api/submit-passcode', async (req, res) => {
   }
 });
 
-// 所有非 /api 的請求，一律直接傳回 public/index.html
+// 所有非 /api 的請求，一律傳回 public/index.html[cite: 10]
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 本地測試用
+// 本地測試用[cite: 10]
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
@@ -239,11 +245,3 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
 }
 
 module.exports = app;
-
-// 提供 public 資料夾內的靜態檔案
-app.use(express.static(path.join(__dirname, 'public')));
-
-// 所有非 /api 的請求，一律傳回 public/index.html
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
