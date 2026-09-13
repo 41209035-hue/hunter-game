@@ -217,9 +217,6 @@
 </div>
 
 <script>
-  // 自動指向 Vercel 當前的後端 API
-  const BACKEND_URL = "";
-
   let gameState = {
     groupId: "",
     targetId: "",
@@ -246,7 +243,6 @@
     showLoading(true);
 
     try {
-      // 修改前若有誤寫為 /server.js 請修正，正確應為：
       const res = await fetch('/api/bind-target', {
         method: "POST",
         headers: { "Content-Type": "application/json" },
