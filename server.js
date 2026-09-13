@@ -7,15 +7,29 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 取得環境變數
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// 靜態檔案提供 (確保 HTML / 圖片可正常讀取)
+app.use(express.static(__dirname));
 
-let supabase = null;
-if (supabaseUrl && supabaseKey) {
-  supabase = createClient(supabaseUrl, supabaseKey);
-} else {
-  console.error("⚠️ 警告：未讀取到 Supabase 環境變數！");
+// 安全取得 Supabase Client (避免頂層宣告在變數異常時直接毀滅 Server)
+function getSupabase() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+
+  if (!supabaseUrl || !supabaseUrl.startsWith('http')) {
+    console.error("❌ 錯誤: SUPABASE_URL 未設定或格式非有效的 HTTP/HTTPS URL");
+    return null;
+  }
+  if (!supabaseKey) {
+    console.error("❌ 錯誤: SUPABASE_SERVICE_ROLE_KEY 未設定");
+    return null;
+  }
+
+  try {
+    return createClient(supabaseUrl, supabaseKey);
+  } catch (err) {
+    console.error("❌ Supabase 初始化失敗:", err.message);
+    return null;
+  }
 }
 
 // CP 與對應密碼表
@@ -38,8 +52,8 @@ function convertDriveUrlToDirect(url) {
   return url;
 }
 
-// 寫入日誌記錄（安全靜默處理，不擋住主要邏輯）
-async function logAction(groupId, targetId, stage, note) {
+// 寫入日誌記錄（安全靜默處理）
+async function logAction(supabase, groupId, targetId, stage, note) {
   if (!supabase) return;
   try {
     await supabase.from('system_log').insert([
@@ -56,11 +70,26 @@ async function logAction(groupId, targetId, stage, note) {
   }
 }
 
+// 健康檢查 API (測試 Server 是否活着)
+app.get('/api/health', (req, res) => {
+  const supabase = getSupabase();
+  res.json({
+    status: "ok",
+    hasUrl: !!process.env.SUPABASE_URL,
+    hasKey: !!(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY),
+    supabaseReady: !!supabase
+  });
+});
+
 // API 1: 綁定目標與獲取初始謎題
 app.post('/api/bind-target', async (req, res) => {
   try {
+    const supabase = getSupabase();
     if (!supabase) {
-      return res.status(500).json({ success: false, message: "伺服器資料庫連線尚未設定完成 (缺少環境變數)！" });
+      return res.status(500).json({ 
+        success: false, 
+        message: "伺服器資料庫連線尚未設定完成！請檢查 Vercel 的 SUPABASE_URL 與 SUPABASE_SERVICE_ROLE_KEY 環境變數。" 
+      });
     }
 
     const { groupId, targetId } = req.body;
@@ -119,7 +148,7 @@ app.post('/api/bind-target', async (req, res) => {
     };
 
     // 紀錄寫入 log
-    logAction(groupId, targetId, 0, "BINDING");
+    logAction(supabase, groupId, targetId, 0, "BINDING");
 
     return res.json({
       success: true,
@@ -136,6 +165,7 @@ app.post('/api/bind-target', async (req, res) => {
 // API 2: 提交密碼驗證並獲取下一階段線索
 app.post('/api/submit-passcode', async (req, res) => {
   try {
+    const supabase = getSupabase();
     if (!supabase) {
       return res.status(500).json({ success: false, message: "伺服器資料庫連線尚未設定完成！" });
     }
@@ -189,7 +219,7 @@ app.post('/api/submit-passcode', async (req, res) => {
       finalPhoto = convertDriveUrlToDirect(targetData.avatar_img_url);
     }
 
-    logAction(groupId, targetId, nextStage, inputPasscode);
+    logAction(supabase, groupId, targetId, nextStage, inputPasscode);
 
     return res.json({
       success: true,
@@ -207,7 +237,7 @@ app.post('/api/submit-passcode', async (req, res) => {
   }
 });
 
-// 本地開發時才監聽 Port，部署到 Vercel 時匯出 app 即可
+// 本地測試時開 Port，Vercel 部署時直接匯出 app
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
